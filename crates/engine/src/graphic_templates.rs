@@ -116,11 +116,16 @@ pub fn find_template(s: &Session, key: &str) -> Result<LibraryEntry> {
         .ok_or_else(|| bad("graphics.template", format!("no graphics template `{key}`")))
 }
 
-/// Register the fonts a template embeds (once per font file).
+/// Register the fonts a template embeds.
 fn register_fonts(t: &GraphicsTemplate) -> usize {
+    register_font_resources(&t.resources)
+}
+
+/// Register embedded fonts (of a template or a layout pack), once per font file.
+pub(crate) fn register_font_resources(resources: &gtemplate::Resources) -> usize {
     static SEEN: OnceLock<Mutex<HashSet<u64>>> = OnceLock::new();
     let mut n = 0;
-    for f in &t.resources.fonts {
+    for f in &resources.fonts {
         let Some(data) = base64_decode(&f.data) else { continue };
         let h = data.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ *b as u64).wrapping_mul(0x100_0000_01b3));
         let mut seen = SEEN.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());

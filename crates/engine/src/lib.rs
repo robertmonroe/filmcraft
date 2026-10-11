@@ -23,6 +23,7 @@ pub mod graphic_templates;
 pub mod graphics;
 pub mod interchange;
 pub mod keyboard;
+pub mod layouts;
 mod marker_export;
 pub mod masks;
 pub mod media_browser;

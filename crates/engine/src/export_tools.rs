@@ -62,6 +62,11 @@ pub struct ExportPresetLibrary {
 }
 
 impl ExportPresetLibrary {
+    /// The data directory given to [`set_dir`](Self::set_dir), if any.
+    pub fn data_dir(&self) -> Option<&Path> {
+        self.dir.as_deref()
+    }
+
     /// Persist in `data_dir` (and load what is there).
     pub fn set_dir(&mut self, data_dir: &Path) {
         self.dir = Some(data_dir.to_path_buf());

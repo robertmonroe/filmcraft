@@ -220,6 +220,8 @@ pub(crate) fn to_param(template: &ParamValue, id: &str, v: &Value) -> Option<Par
             "stroke_type" | "stroke2_type" => graphic::STROKE_OPTS,
             "fill_kind" => graphic::FILL_KIND_OPTS,
             "shape" => SHAPE_OPTS,
+            "source" => graphic::MEDIA_SOURCE_OPTS,
+            "fit" => graphic::MEDIA_FIT_OPTS,
             _ => &[],
         };
         let n = name.to_ascii_lowercase().replace('_', " ");
@@ -241,7 +243,7 @@ fn param_entry<'a>(e: &'a mut EffectInstance, id: &str) -> Option<&'a mut Param>
 
 /// Set properties `props` on layer `e` (keyframe-aware at media time `mt`). Changing the text
 /// keeps per-character styles on their characters.
-fn apply_props(e: &mut EffectInstance, props: &serde_json::Map<String, Value>, mt: Tick) -> Result<()> {
+pub(crate) fn apply_props(e: &mut EffectInstance, props: &serde_json::Map<String, Value>, mt: Tick) -> Result<()> {
     for (k, v) in props {
         if k == "enabled" {
             e.enabled = v.as_bool().unwrap_or(true);
@@ -385,6 +387,21 @@ fn list_layers(s: &Session, clip: ClipId) -> Result<Value> {
             let (kind, text) = match &sp.content {
                 LayerContent::Text(t) => ("text", Some(t.text.clone())),
                 LayerContent::Shape(sh) => (SHAPE_OPTS.get(sh.shape as usize).copied().unwrap_or("Shape"), None),
+                LayerContent::Media(_) => ("media", None),
+            };
+            // a media layer: what it shows and how
+            let media = match &sp.content {
+                LayerContent::Media(m) => Some(json!({
+                    "source": m.source,
+                    "sourceName": graphic::MEDIA_SOURCE_OPTS.get(m.source as usize).copied().unwrap_or(""),
+                    "fit": graphic::MEDIA_FIT_OPTS.get(m.fit as usize).copied().unwrap_or(""),
+                    "focus": [m.focus.0 * 100.0, m.focus.1 * 100.0],
+                    "zoom": m.zoom * 100.0,
+                    "role": m.role,
+                    "size": [m.shape.size.0, m.shape.size.1],
+                    "cornerRadius": m.shape.corner_radius,
+                })),
+                _ => None,
             };
             // point text has no box; paragraph text wraps in one and hides what does not fit
             let (text_type, text_box, overflow) = match &sp.content {
@@ -392,7 +409,7 @@ fn list_layers(s: &Session, clip: ClipId) -> Result<Value> {
                     (Some("paragraph"), Some([t.box_width, t.box_height]), Some(text_layout(t).overflow))
                 }
                 LayerContent::Text(_) => (Some("point"), None, None),
-                LayerContent::Shape(_) => (None, None, None),
+                LayerContent::Shape(_) | LayerContent::Media(_) => (None, None, None),
             };
             Some(json!({
                 "layer": i,
@@ -402,6 +419,7 @@ fn list_layers(s: &Session, clip: ClipId) -> Result<Value> {
                 "text": text,
                 "enabled": e.enabled,
                 "textType": text_type,
+                "media": media,
                 "box": text_box,
                 "overflow": overflow,
                 "position": [sp.transform.position.x, sp.transform.position.y],
@@ -953,6 +971,45 @@ pub fn commands() -> Vec<CommandSpec> {
                 let (clip, layer_i) = match into {
                     Some(c) => (c, add_layer(s, c, layer)?),
                     None => (new_graphic_clip(s, "graphics.newShape", layer, "Shape", p)?, 0),
+                };
+                Ok(json!({"clip": clip.0, "layer": layer_i}))
+            },
+        ),
+        spec(
+            "graphics.newMedia",
+            "Media Window",
+            &[],
+            None,
+            r#"{"source":"all"|n=0 (0 or "all": every video track below the clip composited; n: the n-th track below alone, its clip's own picture),"position":[x,y]? (the window's centre),"size":[w,h]? (default: half the frame),"cornerRadius":f64=0,"fit":"fill|fit|stretch"="fill","focus":[x%,y%]=[50,50],"zoom":f64=100,"role":"camera|screen|media"?,"name":str?,"clip":id? (add the window to this graphic),"seconds":f64=5,"track":index?,"time":ticks?}"#,
+            has_seq,
+            |s, p| {
+                const ID: &str = "graphics.newMedia";
+                let (w, h) = s.active_sequence().map(|q| (q.settings.width, q.settings.height)).unwrap_or((1920, 1080));
+                let pos = vec2_p(p, "position").unwrap_or(Vec2::new(w as f64 / 2.0, h as f64 / 2.0));
+                let size = vec2_p(p, "size").unwrap_or(Vec2::new(w as f64 / 2.0, h as f64 / 2.0));
+                if !(pos.x.is_finite() && pos.y.is_finite() && size.x.is_finite() && size.y.is_finite() && size.x >= 0.0 && size.y >= 0.0) {
+                    return Err(bad(ID, "`position` and `size` must be finite, and the size not negative"));
+                }
+                let source = match p.get("source") {
+                    None | Some(Value::Null) => 0,
+                    Some(Value::String(x)) if x.eq_ignore_ascii_case("all") => 0,
+                    Some(v) => match v.as_u64().filter(|n| (*n as usize) < graphic::MEDIA_SOURCE_OPTS.len()) {
+                        Some(n) => n as u32,
+                        None => return Err(bad(ID, format!("`source` is \"all\" or a track count from 1 to {}", graphic::MEDIA_SOURCE_OPTS.len() - 1))),
+                    },
+                };
+                let mut layer = graphic::new_media_layer(source, pos, size);
+                let mut props = serde_json::Map::new();
+                for k in ["cornerRadius", "fit", "focus", "zoom", "role", "name"] {
+                    if let Some(v) = p.get(k).filter(|v| !v.is_null()) {
+                        props.insert(k.to_string(), v.clone());
+                    }
+                }
+                apply_props(&mut layer, &props, Tick::ZERO)?;
+                let into = u64_p(p, "clip").map(ClipId).filter(|c| s.active_sequence().is_some_and(|q| is_graphic(s, q, *c)));
+                let (clip, layer_i) = match into {
+                    Some(c) => (c, add_layer(s, c, layer)?),
+                    None => (new_graphic_clip(s, ID, layer, "Media Window", p)?, 0),
                 };
                 Ok(json!({"clip": clip.0, "layer": layer_i}))
             },
