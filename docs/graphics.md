@@ -1,7 +1,8 @@
 # Graphics
 
 FilmCraft's graphics work like Premiere's Essential Graphics: a **graphic clip** on a video track
-holds **text** and **shape** layers. Text is set by the text engine in `crates/text`
+holds **text** and **shape** layers, and **media** layers: windows that show the video tracks
+under the clip, which is what layouts are made of ([layout-packs.md](layout-packs.md)). Text is set by the text engine in `crates/text`
 ([README](../crates/text/README.md)): bundled OFL fonts plus system fonts, OpenType shaping with
 kerning and ligatures, bidi, line breaking, all drawn as vectors in linear light.
 
@@ -10,7 +11,7 @@ kerning and ligatures, bidi, line breaking, all drawn as vectors in linear light
 - A graphic clip's project item is an `ItemKind::Graphic { width, height, rate }`: a transparent
   canvas the size of the sequence frame, with unlimited duration. These items are internal and do
   not appear in the Project panel.
-- Its **layers** are effect instances `graphic_text` / `graphic_shape` in the clip's effect list,
+- Its **layers** are effect instances `graphic_text` / `graphic_shape` / `graphic_media` in the clip's effect list,
   in paint order (first = back). They are hidden from the Effects panel. Because they are effect
   instances they save with the project, take keyframes on every animatable property (Source Text
   keyframes hold), appear in Effect Controls and copy with the clip. Standard effects on a graphic
@@ -260,5 +261,5 @@ solid fill colour.
 
 ## Not yet
 
-Mask-with-text, per-layer blend modes, Bézier curves in the pen tool (paths are polygons), media
-layers inside graphics, and template controls grouped into folders.
+Mask-with-text, per-layer blend modes, Bézier curves in the pen tool (paths are polygons), and
+template controls grouped into folders.
