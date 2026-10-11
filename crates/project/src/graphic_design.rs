@@ -401,6 +401,13 @@ pub struct GraphicMeta {
     /// The graphics template this graphic was made from, with its editable properties.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<crate::gtemplate::TemplateLink>,
+    /// The layout (of a layout pack) this graphic was placed from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout: Option<crate::layoutpack::LayoutLink>,
+    /// Smart transition into this clip from the layout clip that ends where it starts on the
+    /// same track (see [`crate::layoutpack`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smart: Option<crate::layoutpack::SmartTransition>,
 }
 
 fn is_roll_off(r: &Roll) -> bool {

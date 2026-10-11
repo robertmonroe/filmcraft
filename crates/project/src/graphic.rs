@@ -1,9 +1,11 @@
-//! Graphic clips: text and shape layers.
+//! Graphic clips: text, shape and media layers.
 //!
 //! A graphic clip is a track item whose project item is an [`ItemKind::Graphic`](crate::ItemKind)
 //! source (a transparent canvas the size of the sequence frame). Its **layers** are effect
-//! instances of the hidden effects [`TEXT_LAYER`] and [`SHAPE_LAYER`] in the clip's effect list,
-//! in paint order (first = back). Being effect instances, layers serialize with the project, get
+//! instances of the hidden effects [`TEXT_LAYER`], [`SHAPE_LAYER`] and [`MEDIA_LAYER`] in the
+//! clip's effect list, in paint order (first = back). A media layer is a window: a rounded
+//! rectangle showing the picture of the video tracks below the clip (all of them, or one), which
+//! is what lets a graphic frame live video (see [`crate::layoutpack`]). Being effect instances, layers serialize with the project, get
 //! keyframes for every animatable property (Source Text holds), show in Effect Controls, and copy
 //! with the clip — like Premiere's Text / Shape components. Standard effects on the clip apply to
 //! the composed graphic; Motion and Opacity apply last.
@@ -19,16 +21,40 @@ use crate::keyframe::{Param, ParamValue};
 
 pub const TEXT_LAYER: &str = "graphic_text";
 pub const SHAPE_LAYER: &str = "graphic_shape";
+pub const MEDIA_LAYER: &str = "graphic_media";
 
 pub const ALIGN_OPTS: &[&str] = &["Left", "Center", "Right", "Justify"];
 pub const CAPS_OPTS: &[&str] = &["Normal", "All Caps", "Small Caps"];
 pub const STROKE_OPTS: &[&str] = &["Outer", "Center", "Inner"];
 pub const SHAPE_OPTS: &[&str] = &["Rectangle", "Ellipse", "Polygon", "Path"];
 pub const FILL_KIND_OPTS: &[&str] = &["Solid", "Linear Gradient"];
+/// What a media layer shows: every video track below the clip composited, or the n-th track below
+/// it alone (1 = the track directly underneath).
+pub const MEDIA_SOURCE_OPTS: &[&str] = &[
+    "All Tracks Below",
+    "Track Below 1",
+    "Track Below 2",
+    "Track Below 3",
+    "Track Below 4",
+    "Track Below 5",
+    "Track Below 6",
+    "Track Below 7",
+    "Track Below 8",
+];
+/// How the source frame is placed in a media layer's box: Fill covers it (cropping the overflow),
+/// Fit shows the whole frame (the layer's fill shows around it), Stretch ignores the aspect ratio.
+pub const MEDIA_FIT_OPTS: &[&str] = &["Fill", "Fit", "Stretch"];
+/// Roles a media layer can ask for when a layout is applied ([`crate::layoutpack`]).
+pub const MEDIA_ROLES: &[&str] = &["camera", "screen", "media"];
 
 /// Whether an effect instance is a graphic layer.
 pub fn is_layer_id(id: &str) -> bool {
-    id == TEXT_LAYER || id == SHAPE_LAYER
+    id == TEXT_LAYER || id == SHAPE_LAYER || id == MEDIA_LAYER
+}
+
+/// Whether an effect list holds an enabled media layer (the clip then draws the tracks below it).
+pub fn has_media_layers(effects: &[EffectInstance]) -> bool {
+    effects.iter().any(|e| e.enabled && e.effect == MEDIA_LAYER)
 }
 
 pub fn is_layer(e: &EffectInstance) -> bool {
@@ -105,10 +131,11 @@ fn layer_def(id: &'static str, name: &'static str, mut params: Vec<ParamDef>) ->
     EffectDef { id, name, kind: EffectKind::Video, category: &[], params, intrinsic: false, accelerated: true, float32: true, yuv: false }
 }
 
-/// Definitions of the two layer kinds (appended to the effect registry; not in the Effects panel).
+/// Definitions of the layer kinds (appended to the effect registry; not in the Effects panel).
 pub(crate) fn layer_defs() -> Vec<EffectDef> {
     const X: &str = "Text";
     const S: &str = "Shape";
+    const M: &str = "Media";
     vec![
         layer_def(
             TEXT_LAYER,
@@ -144,6 +171,20 @@ pub(crate) fn layer_defs() -> Vec<EffectDef> {
                 fl("sides", "Polygon Sides", 6.0, (3.0, 64.0), (3.0, 16.0), "", S),
                 fl("corner_radius", "Corner Radius", 0.0, (0.0, 10_000.0), (0.0, 200.0), "", S),
                 p("points", "Path Points", ParamKind::Curve { hue: false }, ParamValue::Curve(vec![]), false, S),
+            ],
+        ),
+        layer_def(
+            MEDIA_LAYER,
+            "Media",
+            vec![
+                tx("name", "Layer Name", "", false, ""),
+                chc("source", "Source", MEDIA_SOURCE_OPTS, 0, M),
+                tx("role", "Footage Role", "", false, M),
+                p("size", "Size", ParamKind::Point, ParamValue::Vec2(Vec2::new(960.0, 540.0)), true, M),
+                fl("corner_radius", "Corner Radius", 0.0, (0.0, 10_000.0), (0.0, 200.0), "", M),
+                chc("fit", "Fit", MEDIA_FIT_OPTS, 0, M),
+                p("focus", "Focus", ParamKind::Point, ParamValue::Vec2(Vec2::new(50.0, 50.0)), true, M),
+                fl("zoom", "Zoom", 100.0, (1.0, 10_000.0), (100.0, 400.0), "%", M),
             ],
         ),
     ]
@@ -231,10 +272,58 @@ pub struct ShapeProps {
     pub points: Vec<[f32; 2]>,
 }
 
+/// A window onto the video tracks below the graphic clip.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MediaProps {
+    /// The window's box (a rectangle with `corner_radius`, centred on the layer origin).
+    pub shape: ShapeProps,
+    /// 0 = every track below composited, n = the n-th track below alone ([`MEDIA_SOURCE_OPTS`]).
+    pub source: u32,
+    /// 0 fill (cover), 1 fit (contain), 2 stretch ([`MEDIA_FIT_OPTS`]).
+    pub fit: u32,
+    /// The point of the source frame kept in view when it is cropped, as fractions 0..1 of its
+    /// width and height (0.5, 0.5 = the centre).
+    pub focus: (f32, f32),
+    /// Extra magnification of the source inside the box (1 = none).
+    pub zoom: f32,
+    /// What the window is for (`camera`, `screen`, `media` or empty): used to pick its source
+    /// when a layout is applied, and to match windows across a smart transition.
+    pub role: String,
+}
+
+impl MediaProps {
+    /// Where the source frame lies in layer pixels: `(x, y, w, h)` of a `frame`-sized picture
+    /// (sequence pixels) placed in the box according to fit, zoom and focus. The box is centred
+    /// on the layer origin; anything of the picture outside the box is cropped by it.
+    pub fn placement(&self, frame: (f64, f64)) -> (f64, f64, f64, f64) {
+        let finite = |v: f64| if v.is_finite() { v.max(0.0) } else { 0.0 };
+        let (bw, bh) = (finite(self.shape.size.0 as f64), finite(self.shape.size.1 as f64));
+        let (fw, fh) = (finite(frame.0).max(1e-6), finite(frame.1).max(1e-6));
+        let z = if self.zoom.is_finite() { (self.zoom as f64).clamp(0.01, 100.0) } else { 1.0 };
+        let (sx, sy) = match self.fit {
+            1 => {
+                let s = (bw / fw).min(bh / fh);
+                (s, s)
+            }
+            2 => (bw / fw, bh / fh),
+            _ => {
+                let s = (bw / fw).max(bh / fh);
+                (s, s)
+            }
+        };
+        let (dw, dh) = (fw * sx * z, fh * sy * z);
+        // A picture larger than the box slides so that the focus point is as near the centre as it
+        // can be without uncovering the box; a smaller one is centred.
+        let slide = |d: f64, b: f64, f: f32| if d > b { -(d - b) * (f as f64).clamp(0.0, 1.0) } else { (b - d) / 2.0 };
+        (-bw / 2.0 + slide(dw, bw, self.focus.0), -bh / 2.0 + slide(dh, bh, self.focus.1), dw, dh)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum LayerContent {
     Text(TextProps),
     Shape(ShapeProps),
+    Media(MediaProps),
 }
 
 /// A layer evaluated at one time.
@@ -318,6 +407,26 @@ pub fn eval_layer(e: &EffectInstance, t: Tick, frame: (u32, u32)) -> Option<Laye
                 sides: ff(e, "sides", t).round().clamp(3.0, 64.0) as u32,
                 corner_radius: ff(e, "corner_radius", t).max(0.0),
                 points: val(e, "points", t).as_curve().map(<[_]>::to_vec).unwrap_or_default(),
+            })
+        }
+        MEDIA_LAYER => {
+            let sz = vv(e, "size", t);
+            let focus = vv(e, "focus", t);
+            let pct = |v: f64| if v.is_finite() { (v / 100.0).clamp(0.0, 1.0) as f32 } else { 0.5 };
+            let zoom = ff(e, "zoom", t) / 100.0;
+            LayerContent::Media(MediaProps {
+                shape: ShapeProps {
+                    shape: 0,
+                    size: (sz.x.max(0.0) as f32, sz.y.max(0.0) as f32),
+                    sides: 4,
+                    corner_radius: ff(e, "corner_radius", t).max(0.0),
+                    points: Vec::new(),
+                },
+                source: ch(e, "source", t).min(MEDIA_SOURCE_OPTS.len() as u32 - 1),
+                fit: ch(e, "fit", t).min(MEDIA_FIT_OPTS.len() as u32 - 1),
+                focus: (pct(focus.x), pct(focus.y)),
+                zoom: if zoom.is_finite() { zoom.clamp(0.01, 100.0) } else { 1.0 },
+                role: ss(e, "role", t),
             })
         }
         _ => return None,
@@ -424,7 +533,7 @@ pub fn new_vertical_text_layer(text: &str, position: Vec2, size: f64) -> EffectI
 /// Reset a layer's parameters to their defaults, keeping its content (name, text, shape kind,
 /// geometry and path) — Graphics ▸ Reset All Parameters.
 pub fn reset_layer_params(e: &mut EffectInstance) {
-    const KEEP: &[&str] = &["name", "text", "shape", "size", "sides", "points", "vertical", "box_width", "box_height"];
+    const KEEP: &[&str] = &["name", "text", "shape", "size", "sides", "points", "vertical", "box_width", "box_height", "source", "role", "fit"];
     let Some(def) = crate::effect::find_effect(&e.effect) else { return };
     let mut fresh = def.instance();
     for k in KEEP {
@@ -447,6 +556,17 @@ pub fn new_shape_layer(shape: u32, position: Vec2, size: Vec2, points: Vec<[f32;
     e
 }
 
+/// A new media layer (a window onto the tracks below) centred at `position`.
+pub fn new_media_layer(source: u32, position: Vec2, size: Vec2) -> EffectInstance {
+    let mut e = layer_instance(MEDIA_LAYER);
+    set(&mut e, "source", ParamValue::Choice(source.min(MEDIA_SOURCE_OPTS.len() as u32 - 1)));
+    set(&mut e, "position", ParamValue::Vec2(position));
+    set(&mut e, "size", ParamValue::Vec2(size));
+    // what shows where there is no picture (an empty track, or around a fitted frame)
+    set(&mut e, "fill_color", ParamValue::Color([0.11, 0.12, 0.14, 1.0]));
+    e
+}
+
 /// Display name of a layer: its name, else the text (first line), else "Shape 01"-style.
 pub fn layer_display_name(e: &EffectInstance, index: usize) -> String {
     let name = ss(e, "name", Tick::ZERO);
@@ -457,6 +577,8 @@ pub fn layer_display_name(e: &EffectInstance, index: usize) -> String {
         let t = ss(e, "text", Tick::ZERO);
         let first = t.lines().next().unwrap_or("").trim().to_string();
         if first.is_empty() { "Text".into() } else { first.chars().take(40).collect() }
+    } else if e.effect == MEDIA_LAYER {
+        format!("Media {:02}", index + 1)
     } else {
         format!("Shape {:02}", index + 1)
     }

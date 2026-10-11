@@ -314,33 +314,44 @@ impl GraphicsTemplate {
     /// differs from the template's, the layers are scaled uniformly (fit) and centred, and pin
     /// distances scale with them. The result links back to the template.
     pub fn instantiate(&self, canvas: (u32, u32)) -> (Vec<EffectInstance>, GraphicMeta) {
-        let (w, h) = (canvas.0 as f64, canvas.1 as f64);
-        let (tw, th) = (self.canvas[0] as f64, self.canvas[1] as f64);
-        let s = (w / tw).min(h / th);
-        let off = Vec2::new((w - tw * s) / 2.0, (h - th * s) / 2.0);
         let mut layers = self.layers.clone();
-        if (s - 1.0).abs() > 1e-9 || off.x.abs() > 1e-9 || off.y.abs() > 1e-9 {
-            for l in &mut layers {
-                if let Some(p) = l.params.get_mut("position") {
-                    p.map_values(|v| match v {
-                        ParamValue::Vec2(q) if !q.x.is_nan() => ParamValue::Vec2(Vec2::new(q.x * s + off.x, q.y * s + off.y)),
-                        o => o,
-                    });
-                }
-                if let Some(p) = l.params.get_mut("scale") {
-                    p.map_values(|v| match v {
-                        ParamValue::Float(x) => ParamValue::Float(x * s),
-                        o => o,
-                    });
-                }
-                if let Some(pin) = l.layer.as_mut().and_then(|x| x.pin.as_mut()) {
-                    pin.offsets.iter_mut().for_each(|o| *o *= s);
-                }
-            }
-        }
+        fit_layers(&mut layers, (self.canvas[0], self.canvas[1]), canvas);
         let mut meta = self.graphic.clone();
         meta.template = Some(TemplateLink { id: self.id.clone(), name: self.name.clone(), controls: self.controls.clone() });
         (layers, meta)
+    }
+}
+
+/// Fit layers drawn on a `from`-sized canvas to a `to`-sized frame: scaled uniformly and centred
+/// (positions, scales and pin distances; a layer pinned to the frame then follows its edges).
+/// Does nothing when the sizes are the same or `from` is empty.
+pub fn fit_layers(layers: &mut [EffectInstance], from: (u32, u32), to: (u32, u32)) {
+    if from.0 == 0 || from.1 == 0 {
+        return;
+    }
+    let (w, h) = (to.0 as f64, to.1 as f64);
+    let (tw, th) = (from.0 as f64, from.1 as f64);
+    let s = (w / tw).min(h / th);
+    let off = Vec2::new((w - tw * s) / 2.0, (h - th * s) / 2.0);
+    if (s - 1.0).abs() <= 1e-9 && off.x.abs() <= 1e-9 && off.y.abs() <= 1e-9 {
+        return;
+    }
+    for l in layers {
+        if let Some(p) = l.params.get_mut("position") {
+            p.map_values(|v| match v {
+                ParamValue::Vec2(q) if !q.x.is_nan() => ParamValue::Vec2(Vec2::new(q.x * s + off.x, q.y * s + off.y)),
+                o => o,
+            });
+        }
+        if let Some(p) = l.params.get_mut("scale") {
+            p.map_values(|v| match v {
+                ParamValue::Float(x) => ParamValue::Float(x * s),
+                o => o,
+            });
+        }
+        if let Some(pin) = l.layer.as_mut().and_then(|x| x.pin.as_mut()) {
+            pin.offsets.iter_mut().for_each(|o| *o *= s);
+        }
     }
 }
 
