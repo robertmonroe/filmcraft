@@ -3524,3 +3524,90 @@
 	Edit Project Notes	プロジェクトメモを編集
 	Notes for this project: to-dos, instructions, frame numbers… Saved with the project.	このプロジェクトのメモ: やること、指示、フレーム番号など… プロジェクトと一緒に保存されます。
 	GPU acceleration is unavailable; preview renders on the CPU	GPU アクセラレーションを利用できません。プレビューは CPU でレンダリングされます
+	Layouts	レイアウト
+	Install Layout Pack…	レイアウトパックをインストール…
+	Export Layout Pack…	レイアウトパックを書き出し…
+	Remix Layout Pack…	レイアウトパックをリミックス…
+	Save As Layout…	レイアウトとして保存…
+	Remix Layout Pack	レイアウトパックをリミックス
+	Save As Layout	レイアウトとして保存
+	List Layout Packs	レイアウトパックを一覧
+	Remove Layout Pack	レイアウトパックを削除
+	Layout Thumbnail	レイアウトのサムネール
+	List Scenes	シーンを一覧
+	Apply Layout	レイアウトを適用
+	Smart Transition	スマートトランジション
+	Change Layout Theme	レイアウトのテーマを変更
+	Media Window	メディアウィンドウ
+	Layout	レイアウト
+	Split Screen	スプリットスクリーン
+	Chapter	チャプター
+	Quote	引用
+	End	エンド
+	Other	その他
+	No layout packs	レイアウトパックがありません
+	All Kinds	すべての種類
+	Remix…	リミックス…
+	Save this pack's layouts in your own colors and fonts	このパックのレイアウトを自分のカラーとフォントで保存します
+	Install Layout Pack (.fcpack)	レイアウトパックをインストール (.fcpack)
+	No layouts of this kind.	この種類のレイアウトはありません。
+	Apply to Scene	シーンに適用
+	Lay out the scene under the playhead	再生ヘッド位置のシーンにレイアウトを適用します
+	Restyle Sequence	シーケンスのスタイルを変更
+	Give every layout in this sequence this pack's colors and fonts	このシーケンスのすべてのレイアウトにこのパックのカラーとフォントを適用します
+	Scene {i} of {n}	シーン {i} / {n}
+	Fade the layers only one of the two layouts has	片方のレイアウトにしかないレイヤーをフェードします
+	No footage for: {names}	フッテージがありません: {names}
+	FilmCraft Layout Pack	FilmCraft レイアウトパック
+	My {name}	マイ {name}
+	My Layouts	マイレイアウト
+	{name} font:	{name} のフォント:
+	Saved as a FilmCraft layout pack (.fcpack) in your layout packs folder.	FilmCraft レイアウトパック (.fcpack) としてレイアウトパックフォルダーに保存されます。
+	Saved layout pack to {path}	レイアウトパックを {path} に保存しました
+	Pack:	パック:
+	Kind:	種類:
+	The clip is added to the pack as a layout. A pack with this name is made if you have none.	クリップがレイアウトとしてパックに追加されます。この名前のパックがなければ作成されます。
+	Saved layout to {path}	レイアウトを {path} に保存しました
+	Surface	サーフェス
+	Muted	控えめ
+	Accent	アクセント
+	Body	本文
+	Footage Role	フッテージの役割
+	All Tracks Below	下のすべてのトラック
+	Track Below 1	下のトラック 1
+	Track Below 2	下のトラック 2
+	Track Below 3	下のトラック 3
+	Track Below 4	下のトラック 4
+	Track Below 5	下のトラック 5
+	Track Below 6	下のトラック 6
+	Track Below 7	下のトラック 7
+	Track Below 8	下のトラック 8
+	Studio	スタジオ
+	Paper	ペーパー
+	Harbor	ハーバー
+	Dark and quiet, with one warm accent. Speaker, screen, title, chapter, quote and end layouts.	ダークで落ち着いた色調に、暖色のアクセントをひとつ。話者、画面、タイトル、チャプター、引用、エンドのレイアウト。
+	Light and editorial: warm paper, dark type, a blue accent.	明るくエディトリアルな印象：暖かみのある紙、濃い文字、青のアクセント。
+	Navy and brass with a serif heading: measured, professional.	ネイビーと真鍮色にセリフ体の見出し：落ち着いたプロフェッショナルな印象。
+	Speaker – Full	話者 – フル
+	Speaker – Framed	話者 – フレーム
+	Speaker + Title	話者 + タイトル
+	Screen + Speaker	画面 + 話者
+	Screen + Bubble	画面 + バブル
+	Title Card	タイトルカード
+	Chapter Card	チャプターカード
+	Pull Quote	プルクオート
+	End Card	エンドカード
+	The picture fills the frame, with a name plate that widens with the name.	映像がフレーム全体に表示され、名前に合わせて幅が広がるネームプレートが付きます。
+	The picture in a rounded window on the pack's background, over a caption.	パックの背景の上に角丸のウィンドウで映像を表示し、その下にキャプションを置きます。
+	The picture on one side and a heading on the other.	片側に映像、もう片側に見出しを配置します。
+	A screen recording, shown whole, beside the speaker (stacked on tall frames).	画面収録全体を話者の横に表示します（縦長のフレームでは上下に並びます）。
+	A screen recording fills the frame; the speaker rides in a round window in the corner.	画面収録がフレーム全体に表示され、話者は隅の丸いウィンドウに表示されます。
+	A heading and a line under it on the pack's background.	パックの背景の上に見出しとその下の 1 行を表示します。
+	A large chapter number with the chapter's title.	大きなチャプター番号とチャプターのタイトルを表示します。
+	A quotation, with the speaker in a round window beside their name.	引用文と、名前の横の丸いウィンドウに話者を表示します。
+	A centred sign-off.	中央揃えの締めの挨拶。
+	Subheading	小見出し
+	Heading Size	見出しのサイズ
+	Number	番号
+	Kicker	キッカー
+	Line	行

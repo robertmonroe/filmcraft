@@ -3536,3 +3536,90 @@
 	Edit Project Notes	Editar notas del proyecto
 	Notes for this project: to-dos, instructions, frame numbers… Saved with the project.	Notas de este proyecto: tareas pendientes, instrucciones, números de fotograma… Se guardan con el proyecto.
 	Use Effect Shutter Angle	Usar el ángulo de obturación del efecto
+	Layouts	Diseños
+	Install Layout Pack…	Instalar paquete de diseños…
+	Export Layout Pack…	Exportar paquete de diseños…
+	Remix Layout Pack…	Remezclar paquete de diseños…
+	Save As Layout…	Guardar como diseño…
+	Remix Layout Pack	Remezclar paquete de diseños
+	Save As Layout	Guardar como diseño
+	List Layout Packs	Listar paquetes de diseños
+	Remove Layout Pack	Eliminar paquete de diseños
+	Layout Thumbnail	Miniatura de diseño
+	List Scenes	Listar escenas
+	Apply Layout	Aplicar diseño
+	Smart Transition	Transición inteligente
+	Change Layout Theme	Cambiar tema de los diseños
+	Media Window	Ventana de medios
+	Layout	Diseño
+	Split Screen	Pantalla dividida
+	Chapter	Capítulo
+	Quote	Cita
+	End	Final
+	Other	Otro
+	No layout packs	No hay paquetes de diseños
+	All Kinds	Todos los tipos
+	Remix…	Remezclar…
+	Save this pack's layouts in your own colors and fonts	Guarda los diseños de este paquete con tus propios colores y fuentes
+	Install Layout Pack (.fcpack)	Instalar paquete de diseños (.fcpack)
+	No layouts of this kind.	No hay diseños de este tipo.
+	Apply to Scene	Aplicar a la escena
+	Lay out the scene under the playhead	Aplica el diseño a la escena bajo el cabezal de reproducción
+	Restyle Sequence	Cambiar estilo de la secuencia
+	Give every layout in this sequence this pack's colors and fonts	Da a todos los diseños de esta secuencia los colores y las fuentes de este paquete
+	Scene {i} of {n}	Escena {i} de {n}
+	Fade the layers only one of the two layouts has	Funde las capas que solo tiene uno de los dos diseños
+	No footage for: {names}	Sin material para: {names}
+	FilmCraft Layout Pack	Paquete de diseños de FilmCraft
+	My {name}	Mi {name}
+	My Layouts	Mis diseños
+	{name} font:	Fuente de {name}:
+	Saved as a FilmCraft layout pack (.fcpack) in your layout packs folder.	Se guarda como paquete de diseños de FilmCraft (.fcpack) en tu carpeta de paquetes de diseños.
+	Saved layout pack to {path}	Paquete de diseños guardado en {path}
+	Pack:	Paquete:
+	Kind:	Tipo:
+	The clip is added to the pack as a layout. A pack with this name is made if you have none.	El clip se añade al paquete como diseño. Si no tienes un paquete con este nombre, se crea.
+	Saved layout to {path}	Diseño guardado en {path}
+	Surface	Superficie
+	Muted	Atenuado
+	Accent	Acento
+	Body	Cuerpo
+	Footage Role	Función del material
+	All Tracks Below	Todas las pistas inferiores
+	Track Below 1	Pista inferior 1
+	Track Below 2	Pista inferior 2
+	Track Below 3	Pista inferior 3
+	Track Below 4	Pista inferior 4
+	Track Below 5	Pista inferior 5
+	Track Below 6	Pista inferior 6
+	Track Below 7	Pista inferior 7
+	Track Below 8	Pista inferior 8
+	Studio	Estudio
+	Paper	Papel
+	Harbor	Puerto
+	Dark and quiet, with one warm accent. Speaker, screen, title, chapter, quote and end layouts.	Oscuro y sobrio, con un acento cálido. Diseños de hablante, pantalla, título, capítulo, cita y cierre.
+	Light and editorial: warm paper, dark type, a blue accent.	Claro y editorial: papel cálido, tipografía oscura y un acento azul.
+	Navy and brass with a serif heading: measured, professional.	Azul marino y latón con un titular con serifas: sobrio y profesional.
+	Speaker – Full	Hablante: completo
+	Speaker – Framed	Hablante: enmarcado
+	Speaker + Title	Hablante + título
+	Screen + Speaker	Pantalla + hablante
+	Screen + Bubble	Pantalla + burbuja
+	Title Card	Tarjeta de título
+	Chapter Card	Tarjeta de capítulo
+	Pull Quote	Cita destacada
+	End Card	Tarjeta final
+	The picture fills the frame, with a name plate that widens with the name.	La imagen llena el fotograma, con un rótulo que se ensancha con el nombre.
+	The picture in a rounded window on the pack's background, over a caption.	La imagen en una ventana redondeada sobre el fondo del paquete, encima de un pie de texto.
+	The picture on one side and a heading on the other.	La imagen a un lado y un titular al otro.
+	A screen recording, shown whole, beside the speaker (stacked on tall frames).	Una grabación de pantalla, mostrada entera, junto al hablante (apilados en fotogramas altos).
+	A screen recording fills the frame; the speaker rides in a round window in the corner.	Una grabación de pantalla llena el fotograma; el hablante aparece en una ventana redonda en la esquina.
+	A heading and a line under it on the pack's background.	Un titular y una línea debajo sobre el fondo del paquete.
+	A large chapter number with the chapter's title.	Un número de capítulo grande con el título del capítulo.
+	A quotation, with the speaker in a round window beside their name.	Una cita, con el hablante en una ventana redonda junto a su nombre.
+	A centred sign-off.	Una despedida centrada.
+	Subheading	Subtítulo de sección
+	Heading Size	Tamaño del titular
+	Number	Número
+	Kicker	Antetítulo
+	Line	Línea

@@ -673,6 +673,21 @@ mod tests {
             push(&mut out, &template.description);
             template.controls.iter().for_each(|c| push(&mut out, &c.name));
         }
+        // layout packs (Essential Graphics ▸ Layouts) and their theme entries (Remix Layout Pack)
+        for pack in filmcraft_project::layoutpack::builtin_packs() {
+            push(&mut out, &pack.name);
+            push(&mut out, &pack.description);
+            for l in &pack.layouts {
+                push(&mut out, &l.name);
+                push(&mut out, &l.description);
+                l.controls.iter().for_each(|c| push(&mut out, &c.name));
+            }
+            for k in pack.theme.colors.keys().chain(pack.theme.fonts.keys()) {
+                let mut c = k.chars();
+                let title: String = c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default();
+                push(&mut out, &title);
+            }
+        }
         // effect presets (Effects panel ▸ Presets)
         for p in filmcraft_engine::presets::builtin_presets() {
             push(&mut out, &p.name);

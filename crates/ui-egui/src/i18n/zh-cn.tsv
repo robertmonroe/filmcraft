@@ -3517,3 +3517,90 @@
 	Delete Caption Track	删除字幕轨道
 	Delete Caption Tracks	删除多个字幕轨道
 	Delete Empty Caption Tracks	删除空字幕轨道
+	Layouts	布局
+	Install Layout Pack…	安装布局包…
+	Export Layout Pack…	导出布局包…
+	Remix Layout Pack…	改编布局包…
+	Save As Layout…	存储为布局…
+	Remix Layout Pack	改编布局包
+	Save As Layout	存储为布局
+	List Layout Packs	列出布局包
+	Remove Layout Pack	移除布局包
+	Layout Thumbnail	布局缩览图
+	List Scenes	列出场景
+	Apply Layout	应用布局
+	Smart Transition	智能过渡
+	Change Layout Theme	更改布局主题
+	Media Window	媒体窗口
+	Layout	布局
+	Split Screen	分屏
+	Chapter	章节
+	Quote	引言
+	End	结尾
+	Other	其他
+	No layout packs	没有布局包
+	All Kinds	所有种类
+	Remix…	改编…
+	Save this pack's layouts in your own colors and fonts	用你自己的颜色和字体存储此包的布局
+	Install Layout Pack (.fcpack)	安装布局包 (.fcpack)
+	No layouts of this kind.	没有此种类的布局。
+	Apply to Scene	应用到场景
+	Lay out the scene under the playhead	为播放指示器所在的场景应用布局
+	Restyle Sequence	重新设定序列样式
+	Give every layout in this sequence this pack's colors and fonts	让此序列中的所有布局使用此包的颜色和字体
+	Scene {i} of {n}	场景 {i} / {n}
+	Fade the layers only one of the two layouts has	淡入淡出仅存在于其中一个布局的图层
+	No footage for: {names}	没有素材可用于：{names}
+	FilmCraft Layout Pack	FilmCraft 布局包
+	My {name}	我的{name}
+	My Layouts	我的布局
+	{name} font:	{name}字体：
+	Saved as a FilmCraft layout pack (.fcpack) in your layout packs folder.	作为 FilmCraft 布局包 (.fcpack) 存储在你的布局包文件夹中。
+	Saved layout pack to {path}	布局包已存储到 {path}
+	Pack:	包：
+	Kind:	种类：
+	The clip is added to the pack as a layout. A pack with this name is made if you have none.	剪辑将作为布局添加到包中。如果没有此名称的包，则会创建一个。
+	Saved layout to {path}	布局已存储到 {path}
+	Surface	表面
+	Muted	柔和
+	Accent	强调色
+	Body	正文
+	Footage Role	素材角色
+	All Tracks Below	下方所有轨道
+	Track Below 1	下方轨道 1
+	Track Below 2	下方轨道 2
+	Track Below 3	下方轨道 3
+	Track Below 4	下方轨道 4
+	Track Below 5	下方轨道 5
+	Track Below 6	下方轨道 6
+	Track Below 7	下方轨道 7
+	Track Below 8	下方轨道 8
+	Studio	工作室
+	Paper	纸张
+	Harbor	海港
+	Dark and quiet, with one warm accent. Speaker, screen, title, chapter, quote and end layouts.	深色而沉稳，带一处暖色强调。包含讲者、屏幕、标题、章节、引言和结尾布局。
+	Light and editorial: warm paper, dark type, a blue accent.	明亮的编辑风格：暖色纸张、深色文字、蓝色强调。
+	Navy and brass with a serif heading: measured, professional.	海军蓝与黄铜色，配衬线标题：稳重而专业。
+	Speaker – Full	讲者 – 全屏
+	Speaker – Framed	讲者 – 带框
+	Speaker + Title	讲者 + 标题
+	Screen + Speaker	屏幕 + 讲者
+	Screen + Bubble	屏幕 + 气泡
+	Title Card	标题卡
+	Chapter Card	章节卡
+	Pull Quote	引言
+	End Card	结尾卡
+	The picture fills the frame, with a name plate that widens with the name.	画面铺满画框，名牌会随名字加宽。
+	The picture in a rounded window on the pack's background, over a caption.	画面显示在包背景上的圆角窗口中，下方为说明文字。
+	The picture on one side and a heading on the other.	画面在一侧，标题在另一侧。
+	A screen recording, shown whole, beside the speaker (stacked on tall frames).	完整显示的屏幕录制与讲者并排（竖幅画框中上下排列）。
+	A screen recording fills the frame; the speaker rides in a round window in the corner.	屏幕录制铺满画框；讲者显示在角落的圆形窗口中。
+	A heading and a line under it on the pack's background.	在包背景上显示标题及其下方的一行文字。
+	A large chapter number with the chapter's title.	大号章节编号配章节标题。
+	A quotation, with the speaker in a round window beside their name.	一段引言，讲者显示在其名字旁的圆形窗口中。
+	A centred sign-off.	居中的结束语。
+	Subheading	副标题
+	Heading Size	标题大小
+	Number	编号
+	Kicker	眉题
+	Line	行
