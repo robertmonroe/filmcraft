@@ -280,6 +280,15 @@ pub fn handle(app: &mut FilmcraftApp, ctx: &egui::Context, req: &ControlRequest)
                     Err(e) => return err(format!("`gfxTemplates`: {e}")),
                 }
             }
+            // Essential Graphics ▸ Layouts and the layout pack dialogs (`panels::layouts`), merged
+            if let Some(patch) = p.get("layouts") {
+                let mut cur = serde_json::to_value(&app.ui.layouts).unwrap_or_default();
+                merge(&mut cur, patch);
+                match serde_json::from_value(cur) {
+                    Ok(v) => app.ui.layouts = v,
+                    Err(e) => return err(format!("`layouts`: {e}")),
+                }
+            }
             // the Type tool's text editing state: {"clip", "layer", "caret", "anchor"} (byte offsets) or null
             if let Some(v) = p.get("gfxEdit") {
                 match serde_json::from_value(v.clone()) {

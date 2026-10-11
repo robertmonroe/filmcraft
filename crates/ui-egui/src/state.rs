@@ -577,6 +577,9 @@ pub struct UiState {
     /// `panels::graphics_templates`.
     #[serde(default)]
     pub gfx_templates: crate::panels::graphics_templates::GfxTemplatesState,
+    /// Essential Graphics ▸ Layouts and the layout pack dialogs. See `panels::layouts`.
+    #[serde(default)]
+    pub layouts: crate::panels::layouts::LayoutsState,
     /// Lumetri Scopes, Timecode, Events, Progress and Reference Monitor settings. See
     /// `panels::panel_state`.
     #[serde(default)]
@@ -1001,6 +1004,7 @@ impl Default for UiState {
             clip_dialog: None,
             extras: Default::default(),
             gfx_templates: Default::default(),
+            layouts: Default::default(),
             panels: Default::default(),
             keys: Default::default(),
             project_panel: Default::default(),
