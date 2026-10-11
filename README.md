@@ -274,6 +274,7 @@ The control protocol is documented in [docs/control-protocol.md](docs/control-pr
 | [docs/control-protocol.md](docs/control-protocol.md) | Control-channel and MCP reference |
 | [docs/project-files.md](docs/project-files.md) | `.fcproj` format, schema migrations, auto-save and crash recovery |
 | [docs/graphics.md](docs/graphics.md) · [docs/captions.md](docs/captions.md) | Text engine, graphic clips and tools; caption tracks and formats |
+| [docs/layout-packs.md](docs/layout-packs.md) | Layout packs: scene layouts that frame footage in media windows, themes, smart transitions, the `.fcpack` format |
 | [ROADMAP.md](ROADMAP.md) | Stage, parity numbers, languages, what's next and the progress log |
 | [docs/target-app-parity.md](docs/target-app-parity.md) · [docs/gaps.md](docs/gaps.md) · [docs/roadmap.md](docs/roadmap.md) | Parity assessment against Premiere Pro, the ranked list of shortfalls, milestones and current focus |
 | [docs/codec-parity.md](docs/codec-parity.md) · [docs/file-format-parity.md](docs/file-format-parity.md) · [docs/hardware-parity.md](docs/hardware-parity.md) · [docs/ui-parity.md](docs/ui-parity.md) · [docs/localization-parity.md](docs/localization-parity.md) | Parity checklists by dimension |
