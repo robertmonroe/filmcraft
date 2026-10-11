@@ -3,6 +3,11 @@
 //! Each layer is rasterised into a tight premultiplied linear-light image that is cached while
 //! the layer and its transform stay the same.
 //!
+//! A media layer is a rounded box that shows a picture of the tracks below the clip
+//! ([`MediaPicture`], handed in by the compositor): it is drawn like a shape, with the picture
+//! painted through the box over the layer's fill. Without a picture (thumbnails, an empty track)
+//! the fill alone shows. [`shown_specs`] adds the smart transition between two layout clips.
+//!
 //! [`item_layer_specs`] evaluates a graphic clip's layers the way they are shown: keyframes read
 //! through Responsive Design – Time, per-character style runs, responsive pins resolved (pinned
 //! layers move, pinned shapes resize), and the roll / crawl offset applied to every layer.
@@ -12,9 +17,9 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::graphic::{LayerContent, LayerSpec, LinearGradient, ShapeProps, TextProps, eval_layer};
+use filmcraft_project::graphic::{LayerContent, LayerSpec, LinearGradient, MediaProps, ShapeProps, TextProps, eval_layer};
 use filmcraft_project::graphic_design::{GraphicMeta, PinNode, remap_time, resolve_pins, roll_offset};
-use filmcraft_project::{EffectInstance, TrackItem};
+use filmcraft_project::{EffectInstance, Track, TrackItem};
 use filmcraft_text::raster::{Xform, apply, fill_into, xform_scale};
 use filmcraft_text::{Align, Caps, Layout, Mask, ParagraphStyle, StrokeKind, StyleRun, TextStyle, layout_rich, mask, render};
 use filmcraft_time::Tick;
@@ -128,7 +133,7 @@ pub fn shape_path(s: &ShapeProps) -> filmcraft_text::Path {
 pub fn layer_local_bounds(spec: &LayerSpec) -> [f32; 4] {
     match &spec.content {
         LayerContent::Text(t) => text_layout(t).bounds,
-        LayerContent::Shape(s) => match shape_path(s).bounds() {
+        LayerContent::Shape(s) | LayerContent::Media(MediaProps { shape: s, .. }) => match shape_path(s).bounds() {
             Some(b) => [b.0, b.1, b.2, b.3],
             None => [0.0; 4],
         },
@@ -235,6 +240,67 @@ fn over_linear_gradient(px: &mut [f32], msk: &Mask, grad: &LinearGradient, lb: [
     });
 }
 
+/// The picture a media layer shows: a premultiplied linear-light image (at any resolution) and
+/// the size it stands for in square display pixels ([`MediaPictures::frame`]).
+pub struct MediaPicture<'a> {
+    pub img: &'a Image,
+    pub frame: (f64, f64),
+}
+
+/// Paint `pic` through `msk`, placed in layer space by the media layer's fit, zoom and focus
+/// (`inv` is the device→layer transform). Outside the picture nothing is painted, so the layer's
+/// fill shows there (the bars of a fitted frame).
+fn over_picture(px: &mut [f32], msk: &Mask, media: &MediaProps, pic: &MediaPicture, inv: &Xform, origin: (i32, i32)) {
+    let (iw, ih) = (pic.img.w, pic.img.h);
+    if msk.w == 0 || iw == 0 || ih == 0 || pic.img.px.len() < iw * ih * 4 {
+        return;
+    }
+    let (x, y, pw, ph) = media.placement(pic.frame);
+    if !(pw > 1e-6 && ph > 1e-6) {
+        return;
+    }
+    // layer pixels → image pixels
+    let (kx, ky) = (iw as f64 / pw, ih as f64 / ph);
+    let (x, y) = (x as f32, y as f32);
+    let (kx, ky) = (kx as f32, ky as f32);
+    let src = &pic.img.px;
+    let texel = |ix: usize, iy: usize| -> [f32; 4] {
+        let i = (iy * iw + ix) * 4;
+        [src[i], src[i + 1], src[i + 2], src[i + 3]]
+    };
+    let w = msk.w;
+    px.par_chunks_mut(4 * w).enumerate().for_each(|(row, dest)| {
+        let py = origin.1 as f32 + row as f32 + 0.5;
+        let Some(mrow) = msk.a.get(row * w..(row + 1) * w) else { return };
+        for (col, (p, &cov)) in dest.as_chunks_mut::<4>().0.iter_mut().zip(mrow).enumerate() {
+            if cov <= 0.0 {
+                continue;
+            }
+            let (lx, ly) = apply(inv, origin.0 as f32 + col as f32 + 0.5, py);
+            // picture coordinates in image pixels (pixel centres at +0.5)
+            let (u, v) = ((lx - x) * kx, (ly - y) * ky);
+            if !(u >= 0.0 && v >= 0.0 && u <= iw as f32 && v <= ih as f32) {
+                continue;
+            }
+            let (fx, fy) = ((u - 0.5).clamp(0.0, (iw - 1) as f32), (v - 0.5).clamp(0.0, (ih - 1) as f32));
+            let (x0, y0) = (fx as usize, fy as usize);
+            let (x1, y1) = ((x0 + 1).min(iw - 1), (y0 + 1).min(ih - 1));
+            let (tx, ty) = (fx - x0 as f32, fy - y0 as f32);
+            let (a, b, c, d) = (texel(x0, y0), texel(x1, y0), texel(x0, y1), texel(x1, y1));
+            let mut sm = [0.0f32; 4];
+            for i in 0..4 {
+                let top = a[i] + (b[i] - a[i]) * tx;
+                let bot = c[i] + (d[i] - c[i]) * tx;
+                sm[i] = top + (bot - top) * ty;
+            }
+            let k = 1.0 - sm[3] * cov;
+            for i in 0..4 {
+                p[i] = sm[i] * cov + p[i] * k;
+            }
+        }
+    });
+}
+
 /// Solid fill, one mask per distinct colour when text runs carry their own.
 fn paint_solid(px: &mut [f32], cover: &Mask, color: [f32; 4], text: Option<&Layout>, m: &Xform, run_fills: &[Option<[f32; 4]>], origin: (i32, i32)) {
     let Some(layout) = text.filter(|_| run_fills.iter().any(Option::is_some)) else {
@@ -294,8 +360,15 @@ fn paint_mixed_gradient(
     }
 }
 
-/// Rasterise one layer with layer→device transform `m`, clipped to a `cw`×`ch` canvas.
+/// Rasterise one layer with layer→device transform `m`, clipped to a `cw`×`ch` canvas. A media
+/// layer shows its fill only (see [`raster_layer_media`]).
 pub fn raster_layer(spec: &LayerSpec, m: &Xform, cw: usize, ch: usize) -> Option<LayerRaster> {
+    raster_layer_media(spec, m, cw, ch, None)
+}
+
+/// [`raster_layer`], with the picture a media layer shows painted in its box (over the fill,
+/// under centre and inner strokes).
+pub fn raster_layer_media(spec: &LayerSpec, m: &Xform, cw: usize, ch: usize, picture: Option<&MediaPicture>) -> Option<LayerRaster> {
     if !spec.enabled || spec.transform.opacity <= 0.0 {
         return None;
     }
@@ -309,15 +382,15 @@ pub fn raster_layer(spec: &LayerSpec, m: &Xform, cw: usize, ch: usize) -> Option
             }
             Some(l)
         }
-        LayerContent::Shape(_) => None,
+        LayerContent::Shape(_) | LayerContent::Media(_) => None,
     };
     let lb = match &text {
         Some(l) => l.bounds,
         None => layer_local_bounds(spec),
     };
     let shape = match &spec.content {
-        LayerContent::Shape(sh) => Some(shape_path(sh).transformed(m)),
-        _ => None,
+        LayerContent::Shape(sh) | LayerContent::Media(MediaProps { shape: sh, .. }) => Some(shape_path(sh).transformed(m)),
+        LayerContent::Text(_) => None,
     };
     let stroke_out = ap
         .strokes
@@ -414,6 +487,11 @@ pub fn raster_layer(spec: &LayerSpec, m: &Xform, cw: usize, ch: usize) -> Option
     } else if let Some(c) = ap.fill {
         paint_solid(&mut px, &cover, c, text.as_deref(), m, &run_fills, (x0, y0));
     }
+    if let (LayerContent::Media(media), Some(pic)) = (&spec.content, picture)
+        && let Some(inv) = invert_xform(m)
+    {
+        over_picture(&mut px, &cover, media, pic, &inv, (x0, y0));
+    }
     for ((sm, c), (_, _, k)) in strokes.iter().zip(&ap.strokes).rev() {
         if !outer(*k) {
             over_mask(&mut px, sm, premul_linear(*c));
@@ -502,7 +580,12 @@ pub fn apply_pins(specs: &mut [LayerSpec], canvas: (u32, u32)) {
     }
     let nodes: Vec<PinNode> = specs
         .iter()
-        .map(|s| PinNode { uid: s.uid, pin: s.pin.clone(), bounds: layer_bounds(s), resizable: matches!(s.content, LayerContent::Shape(_)) })
+        .map(|s| PinNode {
+            uid: s.uid,
+            pin: s.pin.clone(),
+            bounds: layer_bounds(s),
+            resizable: matches!(s.content, LayerContent::Shape(_) | LayerContent::Media(_)),
+        })
         .collect();
     let out = resolve_pins(&nodes, [0.0, 0.0, canvas.0 as f64, canvas.1 as f64]);
     for ((s, n), b) in specs.iter_mut().zip(&nodes).zip(out) {
@@ -511,7 +594,7 @@ pub fn apply_pins(specs: &mut [LayerSpec], canvas: (u32, u32)) {
         }
         let (ow, oh) = (n.bounds[2] - n.bounds[0], n.bounds[3] - n.bounds[1]);
         let (nw, nh) = (b[2] - b[0], b[3] - b[1]);
-        if let LayerContent::Shape(sh) = &mut s.content {
+        if let LayerContent::Shape(sh) | LayerContent::Media(MediaProps { shape: sh, .. }) = &mut s.content {
             let kx = if ow > 1e-9 { nw / ow } else { 1.0 };
             let ky = if oh > 1e-9 { nh / oh } else { 1.0 };
             if (kx - 1.0).abs() > 1e-12 || (ky - 1.0).abs() > 1e-12 {
@@ -593,6 +676,98 @@ pub fn apply_roll(meta: &GraphicMeta, specs: &mut [LayerSpec], u: Tick, d: Tick,
     let (dx, dy) = roll_offset(&meta.roll, u, d, canvas, cb);
     for s in specs.iter_mut() {
         s.transform.position = Vec2::new(s.transform.position.x + dx, s.transform.position.y + dy);
+    }
+}
+
+/// The layout clip a smart transition into `item` starts from: the enabled graphic clip that ends
+/// exactly where `item` starts on `track`.
+pub fn smart_predecessor<'a>(track: &'a Track, item: &TrackItem) -> Option<&'a TrackItem> {
+    let i = track.items.partition_point(|x| x.start < item.start);
+    let prev = track.items.get(i.checked_sub(1)?)?;
+    (prev.id != item.id && prev.enabled && prev.end() == item.start && prev.graphic_layers().next().is_some()).then_some(prev)
+}
+
+/// A graphic clip's layers as shown at timeline time `t` (`mt` is the clip's effect time there):
+/// [`item_layer_specs`], and while a smart transition into the clip is running, the layers
+/// interpolated from the last frame of the layout clip before it on `track`
+/// ([`filmcraft_project::layoutpack::tween_layers`]).
+pub fn shown_specs(track: Option<&Track>, item: &TrackItem, t: Tick, mt: Tick, canvas: (u32, u32)) -> Vec<LayerSpec> {
+    let specs: Vec<LayerSpec> = item_layer_specs(item, mt, canvas).into_iter().map(|(_, s)| s).collect();
+    let Some(smart) = item.graphic.as_deref().and_then(|g| g.smart.as_ref()) else { return specs };
+    let Some(k) = smart.progress(t - item.start) else { return specs };
+    let Some(prev) = track.and_then(|tr| smart_predecessor(tr, item)) else { return specs };
+    let last = prev.effect_time_at(prev.end() - Tick(1));
+    let from: Vec<LayerSpec> = item_layer_specs(prev, last, canvas).into_iter().map(|(_, s)| s).collect();
+    filmcraft_project::layoutpack::tween_layers(&from, &specs, k, smart.fades)
+}
+
+/// Whether drawing `item` at timeline `t` needs more than its own layers: it has a media layer
+/// (which shows the tracks below), or a smart transition from the clip before it on `track` is
+/// running (whose layers, and media layers, it then draws too).
+pub fn needs_tracks(track: &Track, item: &TrackItem, t: Tick) -> bool {
+    if filmcraft_project::graphic::has_media_layers(&item.effects) {
+        return true;
+    }
+    item.graphic.as_deref().and_then(|g| g.smart.as_ref()).is_some_and(|s| s.progress(t - item.start).is_some()) && smart_predecessor(track, item).is_some()
+}
+
+/// Whether `specs` hide everything under a `canvas`-sized graphic: some layer is an opaque,
+/// square-cornered, unrotated rectangle with a solid fill that covers the whole canvas.
+pub fn covers_canvas(specs: &[LayerSpec], canvas: (u32, u32)) -> bool {
+    specs.iter().any(|s| {
+        let LayerContent::Shape(sh) = &s.content else { return false };
+        let t = &s.transform;
+        s.enabled
+            && sh.shape == 0
+            && sh.corner_radius <= 0.0
+            && t.opacity >= 1.0
+            && t.rotation == 0.0
+            && t.scale.x > 0.0
+            && t.scale.y > 0.0
+            && s.appearance.gradient.is_none()
+            && s.appearance.fill.is_some_and(|c| c[3] >= 1.0)
+            && {
+                let b = layer_bounds(s);
+                b[0] <= 0.0 && b[1] <= 0.0 && b[2] >= canvas.0 as f64 && b[3] >= canvas.1 as f64
+            }
+    })
+}
+
+/// Where the pictures of media layers come from (the compositor, which renders the tracks below
+/// the clip).
+pub trait MediaPictures {
+    /// The size of the picture `media` shows, in square display pixels: the sequence frame for
+    /// all tracks below, a clip's own frame for one track. `None`: there is nothing to show
+    /// (the layer's fill is drawn).
+    fn frame(&self, media: &MediaProps) -> Option<(f64, f64)>;
+    /// The whole picture, premultiplied linear light, at about `magnification` output pixels per
+    /// pixel of [`frame`](Self::frame) (any resolution will do; it is resampled into the box).
+    fn picture(&self, media: &MediaProps, magnification: f64) -> Option<Arc<Image>>;
+}
+
+/// Draw `specs` onto `out` (`m` maps graphic canvas pixels to `out` pixels), with what each media
+/// layer shows from `pictures`.
+pub fn draw_specs_with(specs: &[LayerSpec], m: &Affine, out: &mut Image, pictures: &dyn MediaPictures) {
+    for spec in specs {
+        let lm = xform(&m.then_apply(&layer_matrix(spec)));
+        if let LayerContent::Media(media) = &spec.content
+            && spec.enabled
+            && spec.transform.opacity > 0.0
+            && let Some(frame) = pictures.frame(media)
+        {
+            let (_, _, pw, _) = media.placement(frame);
+            let magnification = pw / frame.0.max(1e-6) * xform_scale(&lm) as f64;
+            if let Some(img) = pictures.picture(media, magnification) {
+                // a moving picture is new every frame: not worth caching
+                if let Some(r) = raster_layer_media(spec, &lm, out.w, out.h, Some(&MediaPicture { img: &img, frame })) {
+                    composite_raster(out, &r, 0, 0);
+                }
+                continue;
+            }
+        }
+        if let Some(r) = raster_layer_cached(spec, &lm, out.w, out.h) {
+            composite_raster(out, &r, 0, 0);
+        }
     }
 }
 

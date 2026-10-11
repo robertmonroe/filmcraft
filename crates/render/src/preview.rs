@@ -167,6 +167,13 @@ pub fn video_segments(project: &Project, seq_id: ItemId) -> Vec<Segment> {
                 Layer::Item(ti, it) => {
                     h.json(&("item", ti));
                     hash_item(&mut h, project, it, t, 0);
+                    // a smart transition draws the layout clip before this one too
+                    if it.graphic.as_deref().is_some_and(|g| g.smart.as_ref().is_some_and(|s| s.active()))
+                        && let Some(prev) = seq.video_tracks.get(*ti).and_then(|tr| crate::graphic_clip::smart_predecessor(tr, it))
+                    {
+                        h.json(&"smart");
+                        hash_item(&mut h, project, prev, t, 0);
+                    }
                     absolute |= prints_time(it);
                     clips.push(it.id);
                 }

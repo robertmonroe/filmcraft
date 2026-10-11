@@ -232,6 +232,16 @@ fn layered_at(project: &Project, seq: &Sequence, t: Tick) -> bool {
         {
             return false;
         }
+        // A graphic that shows the tracks below it (media layers), or that is in a smart
+        // transition, is composited by the CPU with those tracks.
+        let showing = tr
+            .transitions
+            .iter()
+            .find(|x| x.range().contains(t))
+            .map_or_else(|| [tr.item_at(t), None], |x| [x.from.and_then(|id| tr.item(id)), x.to.and_then(|id| tr.item(id))]);
+        if showing.into_iter().flatten().any(|it| it.enabled && crate::graphic_clip::needs_tracks(tr, it, t)) {
+            return false;
+        }
     }
     true
 }

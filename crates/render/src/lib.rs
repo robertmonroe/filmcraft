@@ -170,13 +170,52 @@ impl Layer {
 /// Render a sequence, or only its video track `only` (a multi-camera angle; drawn even when the
 /// track's output is off).
 pub(crate) fn render_seq_tracks(project: &Project, seq: &Sequence, t: Tick, opts: RenderOptions, sources: &dyn SourceProvider, only: Option<usize>) -> Image {
+    render_seq_part(project, seq, t, opts, sources, only, usize::MAX)
+}
+
+/// How much deeper ([`RenderOptions::depth`]) the picture of a media layer is rendered than the
+/// clip that shows it: a window onto tracks that hold a layout whose windows show tracks that
+/// hold a layout is followed, and no further (each level can ask for several pictures).
+const MEDIA_LAYER_DEPTH: u32 = 4;
+
+/// The lowest video track that has to be drawn at `t` when tracks `0..below` are composited: the
+/// topmost one whose clip hides everything under it (a layout with an opaque background, shown
+/// plainly), or 0. Skipping the hidden tracks matters because such a layout usually draws them
+/// itself, inside its media windows.
+fn first_visible_track(project: &Project, seq: &Sequence, t: Tick, opts: RenderOptions, below: usize) -> usize {
+    for (ti, track) in seq.video_tracks.iter().enumerate().take(below).skip(1).rev() {
+        if !track.enabled || track.transitions.iter().any(|tr| tr.range().contains(t)) {
+            continue;
+        }
+        let Some(item) = track.item_at(t).filter(|i| i.enabled) else { continue };
+        if !project.item(item.item).is_some_and(|p| matches!(p.kind, ItemKind::Graphic { .. })) {
+            continue;
+        }
+        let mt = item.effect_time_at(t);
+        let plain = !item.has_opacity_masks() && !(opts.effects && item.has_standard_effects()) && opacity_blend(item, mt) == (1.0, Blend::Normal);
+        let Some(size) = source_size(project, item.item) else { continue };
+        if plain
+            && size == (seq.settings.width, seq.settings.height)
+            && identity_placement(&motion_matrix(seq, item, size, None, mt))
+            && graphic_clip::covers_canvas(&graphic_clip::shown_specs(Some(track), item, t, mt, size), size)
+        {
+            return ti;
+        }
+    }
+    0
+}
+
+/// [`render_seq_tracks`] of the video tracks under track `below` only (`usize::MAX`: all of
+/// them): what a media layer on track `below` shows as "all tracks below".
+fn render_seq_part(project: &Project, seq: &Sequence, t: Tick, opts: RenderOptions, sources: &dyn SourceProvider, only: Option<usize>, below: usize) -> Image {
     let (w, h) = output_size(seq, opts.scale);
     let mut canvas = Canvas::new(w, h);
     if opts.depth > MAX_NEST_DEPTH {
         return canvas.into_image();
     }
     let tc = format_time(t, seq.settings.frame_rate, seq.settings.drop_frame, TimeDisplay::Timecode, seq.settings.sample_rate as i64);
-    for (ti, track) in seq.video_tracks.iter().enumerate() {
+    let first = if only.is_none() { first_visible_track(project, seq, t, opts, below.min(seq.video_tracks.len())) } else { 0 };
+    for (ti, track) in seq.video_tracks.iter().enumerate().take(below).skip(first) {
         // A cancelled frame job (playback moved on) stops here; its result is discarded.
         if filmcraft_media::cancel::cancelled() {
             return canvas.into_image();
@@ -440,7 +479,7 @@ pub(crate) fn item_layer_ex(
         // vectors straight to the output: no resampling, crisp at any Motion scale
         let m = Affine::scale(opts.scale as f64, opts.scale as f64).then_apply(&motion);
         let mut canvas = Image::new(w, h);
-        graphic_clip::render_graphic(item, mt, src_size, &m, &mut canvas);
+        draw_graphic(project, seq, item, t, mt, src_size, &m, opts, sources, tc, &mut canvas);
         let (op, bl) = opacity_blend(item, mt);
         return Some(Layer::Full { image: canvas, opacity: op, blend: bl, opaque: false });
     }
@@ -465,14 +504,155 @@ pub(crate) fn item_layer_ex(
         // anything else takes the general path below, with the frame already fetched
         fetched = Some((src, frame, n));
     }
-    let mut layer = match fetched {
-        Some((src, frame, n)) => media_image(project, seq, item, t, &src, &frame, n, want),
-        None => base_layer(project, seq, item, t, opts, sources, want)?,
-    };
-    let px_scale = layer.w as f32 / src_size.0.max(1) as f32;
+    let (layer, px_scale) = item_picture(project, seq, item, t, opts, sources, tc, want, fetched)?;
     // layer px → source px → sequence px → output px
     let m = Affine::scale(opts.scale as f64, opts.scale as f64).then_apply(&motion).then_apply(&Affine::scale(1.0 / px_scale as f64, 1.0 / px_scale as f64));
+    let placed = if layer.w == w && layer.h == h && identity_placement(&m) { layer } else { layer.transformed(w, h, &m) };
+    let (op, bl) = opacity_blend(item, mt);
+    Some(Layer::Full { image: placed, opacity: op, blend: bl, opaque: false })
+}
+
+/// What a media layer shows.
+enum Shown<'a> {
+    /// The composite of the video tracks under this track index.
+    Below(usize),
+    /// One track's frame (a transition is running on it).
+    Track(usize),
+    /// One clip's own picture.
+    Clip(&'a TrackItem),
+}
+
+/// The pictures of the media layers of the graphic clip on video track `ti` at timeline `t`.
+///
+/// "All Tracks Below" is the composite of those tracks as the sequence shows them. "Track Below
+/// n" is that track's clip itself: its own picture with its effects, masks and opacity, before
+/// Motion places it in the sequence frame, so a layout frames the footage whatever its size and
+/// shape (16:9 footage fills a window in a 9:16 sequence instead of arriving letterboxed). While a
+/// transition runs on that track, the track's frame is shown instead. Pictures are rendered at
+/// about the size they are drawn, in the sequence's working space and without captions (they are
+/// part of this sequence's picture, converted for display once at the end).
+struct TrackPictures<'a> {
+    project: &'a Project,
+    seq: &'a Sequence,
+    ti: Option<usize>,
+    t: Tick,
+    opts: RenderOptions,
+    sources: &'a dyn SourceProvider,
+    tc: &'a str,
+    /// Pictures already rendered for this clip, by (source, resolution step).
+    made: std::cell::RefCell<Vec<((u32, u32), Option<Arc<Image>>)>>,
+}
+
+impl<'a> TrackPictures<'a> {
+    fn shown(&self, media: &filmcraft_project::graphic::MediaProps) -> Option<Shown<'a>> {
+        let ti = self.ti?;
+        if media.source == 0 {
+            return (ti > 0).then_some(Shown::Below(ti));
+        }
+        let i = ti.checked_sub(media.source as usize)?;
+        let track = self.seq.video_tracks.get(i).filter(|tr| tr.enabled)?;
+        if track.transitions.iter().any(|x| x.range().contains(self.t)) {
+            return Some(Shown::Track(i));
+        }
+        let item = track.item_at(self.t).filter(|it| it.enabled)?;
+        let kind = &self.project.item(item.item)?.kind;
+        (!matches!(kind, ItemKind::AdjustmentLayer { .. })).then_some(Shown::Clip(item))
+    }
+
+    fn sub(&self, scale: f32) -> Option<RenderOptions> {
+        let sub = RenderOptions { scale, depth: self.opts.depth + MEDIA_LAYER_DEPTH, captions: false, working_output: true, ..self.opts };
+        (sub.depth <= MAX_NEST_DEPTH && !filmcraft_media::cancel::cancelled()).then_some(sub)
+    }
+}
+
+impl graphic_clip::MediaPictures for TrackPictures<'_> {
+    fn frame(&self, media: &filmcraft_project::graphic::MediaProps) -> Option<(f64, f64)> {
+        match self.shown(media)? {
+            Shown::Below(_) | Shown::Track(_) => Some((self.seq.settings.width as f64, self.seq.settings.height as f64)),
+            // the clip's frame in square pixels
+            Shown::Clip(item) => {
+                let (w, h) = self.project.conformed_source_size(item.item, (1, 1))?;
+                (w > 0.0 && h > 0.0).then_some((w, h))
+            }
+        }
+    }
+
+    fn picture(&self, media: &filmcraft_project::graphic::MediaProps, magnification: f64) -> Option<Arc<Image>> {
+        let shown = self.shown(media)?;
+        // eighths of full size, never more than the source itself has
+        let step = if magnification.is_finite() { (magnification * 8.0).ceil().clamp(1.0, 8.0) as u32 } else { 8 };
+        let key = (media.source, step);
+        if let Some((_, img)) = self.made.borrow().iter().find(|(k, _)| *k == key) {
+            return img.clone();
+        }
+        let scale = step as f32 / 8.0;
+        let img = self.sub(scale).and_then(|sub| match shown {
+            Shown::Below(ti) => Some(render_seq_part(self.project, self.seq, self.t, sub, self.sources, None, ti)),
+            Shown::Track(i) => Some(render_seq_part(self.project, self.seq, self.t, sub, self.sources, Some(i), usize::MAX)),
+            Shown::Clip(item) => {
+                // the clip is asked for the fraction of its own size that it is drawn at
+                let (mut img, _) =
+                    item_picture(self.project, self.seq, item, self.t, RenderOptions { scale: self.opts.scale, ..sub }, self.sources, self.tc, scale, None)?;
+                img.scale_alpha(opacity_blend(item, item.effect_time_at(self.t)).0);
+                Some(img)
+            }
+        });
+        let img = img.map(Arc::new);
+        self.made.borrow_mut().push((key, img.clone()));
+        img
+    }
+}
+
+/// Draw a graphic clip's layers at timeline `t` (effect time `mt`) onto `out`; `m` maps graphic
+/// canvas pixels to `out` pixels. A smart transition from the layout clip before it is applied,
+/// and media layers show the video tracks under the clip ([`TrackPictures`]).
+#[allow(clippy::too_many_arguments)]
+fn draw_graphic(
+    project: &Project,
+    seq: &Sequence,
+    item: &TrackItem,
+    t: Tick,
+    mt: Tick,
+    canvas: (u32, u32),
+    m: &Affine,
+    opts: RenderOptions,
+    sources: &dyn SourceProvider,
+    tc: &str,
+    out: &mut Image,
+) {
+    let ti = seq.video_tracks.iter().position(|tr| tr.item(item.id).is_some());
+    let specs = graphic_clip::shown_specs(ti.and_then(|i| seq.video_tracks.get(i)), item, t, mt, canvas);
+    let pictures = TrackPictures { project, seq, ti, t, opts, sources, tc, made: Default::default() };
+    graphic_clip::draw_specs_with(&specs, m, out, &pictures);
+}
+
+/// A clip's own picture at timeline `t`, at `want` of its source size: decoded (or a nested
+/// sequence rendered, a graphic rasterised), with its standard effects and opacity masks, before
+/// Motion places it. Returns the image and how many of its pixels make one source pixel.
+#[allow(clippy::too_many_arguments)]
+fn item_picture(
+    project: &Project,
+    seq: &Sequence,
+    item: &TrackItem,
+    t: Tick,
+    opts: RenderOptions,
+    sources: &dyn SourceProvider,
+    tc: &str,
+    want: f32,
+    fetched: Option<(SharedSource, Arc<VideoFrame>, usize)>,
+) -> Option<(Image, f32)> {
+    let mt = item.effect_time_at(t);
+    let src_size = source_size(project, item.item)?;
+    let mut layer = match fetched {
+        Some((src, frame, n)) => media_image(project, seq, item, t, &src, &frame, n, want),
+        None => base_layer(project, seq, item, t, opts, sources, tc, want)?,
+    };
+    let px_scale = layer.w as f32 / src_size.0.max(1) as f32;
     if opts.effects {
+        // layer px → source px → sequence px → output px
+        let motion = motion_matrix(seq, item, src_size, source_par(project, item.item), mt);
+        let m =
+            Affine::scale(opts.scale as f64, opts.scale as f64).then_apply(&motion).then_apply(&Affine::scale(1.0 / px_scale as f64, 1.0 / px_scale as f64));
         let env = vfx::ItemEnv { project, seq, item, t, opts, sources, want, layer_size: (layer.w, layer.h), layer_to_output: m, tc };
         let cx = effects::FxCtx {
             t: mt,
@@ -492,9 +672,7 @@ pub(crate) fn item_layer_ex(
         }
     }
     mask::apply_opacity_masks(&mut layer, item, mt, px_scale);
-    let placed = if layer.w == w && layer.h == h && identity_placement(&m) { layer } else { layer.transformed(w, h, &m) };
-    let (op, bl) = opacity_blend(item, mt);
-    Some(Layer::Full { image: placed, opacity: op, blend: bl, opaque: false })
+    Some((layer, px_scale))
 }
 
 /// The layer of a plain media frame (see [`item_layer_ex`]): only the part with alpha when the frame
@@ -554,6 +732,7 @@ fn media_image(project: &Project, seq: &Sequence, item: &TrackItem, t: Tick, src
 
 /// A track item's picture at timeline `t` before any effect (decoded, colour managed, frame
 /// blended; nested sequences rendered; graphics rasterised), at `want` of its source size.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn base_layer(
     project: &Project,
     seq: &Sequence,
@@ -561,6 +740,7 @@ pub(crate) fn base_layer(
     t: Tick,
     opts: RenderOptions,
     sources: &dyn SourceProvider,
+    tc: &str,
     want: f32,
 ) -> Option<Image> {
     // `ft`: the media time of the frame shown
@@ -594,7 +774,7 @@ pub(crate) fn base_layer(
             // standard effects work on the graphic at source resolution, then Motion places it
             let (gw, gh) = (((src_size.0 as f32 * want).ceil() as usize).max(1), ((src_size.1 as f32 * want).ceil() as usize).max(1));
             let mut img = Image::new(gw, gh);
-            graphic_clip::render_graphic(item, mt, src_size, &Affine::scale(want as f64, want as f64), &mut img);
+            draw_graphic(project, seq, item, t, mt, src_size, &Affine::scale(want as f64, want as f64), opts, sources, tc, &mut img);
             img
         }
     })
@@ -710,3 +890,7 @@ mod region_tests;
 #[cfg(test)]
 #[path = "par_tests.rs"]
 mod par_tests;
+
+#[cfg(test)]
+#[path = "layout_tests.rs"]
+mod layout_tests;
