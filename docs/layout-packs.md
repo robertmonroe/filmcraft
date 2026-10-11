@@ -206,7 +206,7 @@ A pack is one UTF-8 JSON file (`filmcraft_project::layoutpack::LayoutPack`):
 | `layouts[].graphic` | roll / crawl and responsive time of the placed clip, as for a graphics template |
 | `layouts[].controls` | the properties a user of the layout edits, as in a graphics template: `{id, name, kind, layer, param, min, max}` |
 | `layouts[].bindings` | `{layer, param, token}`: `token` is `color.<name>` for a colour parameter, or `font.<name>` with `param: "font"` (sets family and style). A themed colour keeps the alpha the layout gave the parameter |
-| `layouts[].designs` | one or more drawings: `{canvas: [w, h], layers}`. `layers` are `graphic_text`, `graphic_shape` and `graphic_media` effect instances exactly as in a project file, each with a unique `layer.uid`; the same layer has the same uid in every design |
+| `layouts[].designs` | one or more drawings: `{canvas: [w, h], layers}`. `layers` are `graphic_text`, `graphic_shape` and `graphic_media` effect instances as in a project file, each with a unique `layer.uid`; the same layer has the same uid in every design. Parameters left at their default value may be omitted (and are, in the files FilmCraft writes) |
 | `resources.fonts` | optional embedded font files (base64) with their licence, registered on install. Only embed fonts whose licence allows redistribution |
 
 A pack file is untrusted input: sizes, counts and durations are bounded, ZIP archives are refused
